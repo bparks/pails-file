@@ -1,0 +1,5 @@
+{
+	"name": "files",
+	"index": "index.php",
+	"deps": ["auth", "form_builder"]
+}
