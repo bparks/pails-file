@@ -1,0 +1,11 @@
+{
+	"name": "pails/file",
+	"autoload": {
+		"files": ["index.php"]
+	},
+	"require": {
+		"pails/pails": "dev-master",
+		"pails/auth": "dev-master",
+		"pails/form_builder": "dev-master"
+	}
+}
