@@ -31,16 +31,18 @@ class FileController extends Pails\Controller
 		{
 			if (file_exists(PUBLIC_FILES.$path.'/'.$_POST['dir_name']))
 			{
-				$this->model = "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists.";
-				return;
+				$this->view = false;
+				return array(
+					'error' => "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists."
+				);
 			}
 
 			mkdir(PUBLIC_FILES.$path.'/'.$_POST['dir_name']);
-			$this->model = '/file/index'.$path;
-			return 302;
+			$this->view = false;
+			return array('status' => 'OK');
 		}
 
-		$this->model = $path;
+		return 404;
 	}
 
 	function upload ($opts = array())
@@ -53,19 +55,21 @@ class FileController extends Pails\Controller
 		{
 			if (file_exists(PUBLIC_FILES.$path.'/'.$_FILES['file']['name']))
 			{
-				$this->model = "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists.";
-				return;
+				$this->view = false;
+				return array(
+					"error" => "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists."
+				);
 			}
 
 			//Do the uploading
 			$destination = PUBLIC_FILES.$path.'/'.$_FILES['file']['name'];
 			move_uploaded_file($_FILES['file']['tmp_name'], $destination);
 
-			$this->model = '/file/index'.$path;
-			return 302;
+			$this->view = false;
+			return array('status' => 'OK');
 		}
 
-		$this->model = $path;
+		return 404;
 	}
 
 	/*
