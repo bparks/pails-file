@@ -100,20 +100,18 @@ class FileController extends Pails\Controller
 
 	private $commonFiles;
 	private $userFiles;
-	private $permitCommon;
 
 	function __construct()
 	{
 		$this->commonFiles = \Pails\File\Config::getCommonFilePath();
 		$this->userFiles = \Pails\File\Config::getUserFilePath();
-		$this->permitCommon = \Pails\File\Config::isPermittedToManageCommon(User::find($this->current_user()->user_id)->username);
 	}
 
 	function index ($opts = array())
 	{
-		$path = Path::create($opts, $this->current_user());
+		$path = Path::create($opts);
 
-		if (!$path->user && !$this->permitCommon)
+		if (!$path->user && !$this->require_permission('manage-common-files'))
 		{
 			$this->model = '/file/index/~'.$path->displayPath();
 			return 302;
@@ -127,7 +125,12 @@ class FileController extends Pails\Controller
 
 	function mkdir ($opts = array())
 	{
-		$path = Path::create($opts, $this->current_user());
+		$path = Path::create($opts);
+
+		if (!$path->user && !$this->require_permission('manage-common-files'))
+		{
+			return 403;
+		}
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && $_POST['dir_name'] != '')
 		{
@@ -149,7 +152,12 @@ class FileController extends Pails\Controller
 
 	function upload ($opts = array())
 	{
-		$path = Path::create($opts, $this->current_user());
+		$path = Path::create($opts);
+
+		if (!$path->user && !$this->require_permission('manage-common-files'))
+		{
+			return 403;
+		}
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['file']))
 		{

@@ -4,8 +4,8 @@
 		"files": ["index.php"]
 	},
 	"require": {
-		"pails/pails": "dev-master",
-		"pails/auth": "dev-master",
-		"pails/form_builder": "dev-master"
+		"pails/pails": "*",
+		"pails/auth": "^1.0",
+		"pails/form_builder": "*"
 	}
 }

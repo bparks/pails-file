@@ -29,19 +29,4 @@ class Config
 	{
 		return self::$userFilePath;
 	}
-
-	public static function allowUserToManageCommon ($users)
-	{
-		if (is_array($users))
-			self::$adminUsers = array_merge(self::$adminUsers, $users);
-		else
-			self::$adminUsers[] = $users;
-	}
-
-	public static function isPermittedToManageCommon ($user)
-	{
-		if (in_array($user, self::$adminUsers))
-			return true;
-		return false;
-	}
 }
