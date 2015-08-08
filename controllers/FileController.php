@@ -1,9 +1,10 @@
 <?php
 
-class Path
+class Path implements \Iterator
 {
 	public $user = false;
 	public $path = "/";
+	private $components = array();
 
 	function __construct($path = "/", $user = false)
 	{
@@ -25,9 +26,15 @@ class Path
 
 	function rootPath()
 	{
-		return $this->user ?
-			\Pails\File\Config::getUserFilePath() :
+		//This is an awful hack...
+		$root = $this->user ?
+			\Pails\File\Config::getUserFilePath() . '/' . (User::find($_SESSION['userPieUser']->user_id)->username) :
 			\Pails\File\Config::getCommonFilePath();
+
+		if (!file_exists($root))
+			mkdir($root);
+
+		return $root;
 	}
 
 	static function create ($parts)
@@ -48,6 +55,37 @@ class Path
 			$p->path .= implode('/', $parts);
 
 		return $p;
+	}
+
+	//Iterator implementation
+	private $curIdx = 0;
+	
+	public function current ()
+	{
+		$tmp = array_slice($this->components, 0, $this->curIdx + 1);
+		$ret = implode('/', $tmp);
+		return ($this->user ? "/~" : "") . $ret . '/';
+	}
+
+	public function key ()
+	{
+		return $this->components[$this->curIdx];
+	}
+
+	public function next ()
+	{
+		$this->curIdx++;
+	}
+
+	public function rewind ()
+	{
+		$tmp = preg_replace('/\/\/*/', '/', substr($this->path, 1));
+		$this->components = array_merge(array(""), array_filter(explode('/', $tmp)));
+		$this->curIdx = 0;
+	}
+	public function valid ()
+	{
+		return $this->curIdx < count($this->components);
 	}
 }
 
@@ -73,7 +111,7 @@ class FileController extends Pails\Controller
 
 	function index ($opts = array())
 	{
-		$path = Path::create($opts);
+		$path = Path::create($opts, $this->current_user());
 
 		if (!$path->user && !$this->permitCommon)
 		{
@@ -82,13 +120,14 @@ class FileController extends Pails\Controller
 		}
 
 		if (!$this->validate_directory($path)) return 404;
+		if (!file_exists($path->absolutePath())) return 404;
 
 		$this->model = array('directory' => $path, 'handle' => opendir($path->absolutePath()));
 	}
 
 	function mkdir ($opts = array())
 	{
-		$path = Path::create($opts);
+		$path = Path::create($opts, $this->current_user());
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && $_POST['dir_name'] != '')
 		{
@@ -105,12 +144,12 @@ class FileController extends Pails\Controller
 			return array('status' => 'OK');
 		}
 
-		return 404;
+		$this->model = $path->displayPath();
 	}
 
 	function upload ($opts = array())
 	{
-		$path = Path::create($opts);
+		$path = Path::create($opts, $this->current_user());
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['file']))
 		{
@@ -130,7 +169,7 @@ class FileController extends Pails\Controller
 			return array('status' => 'OK');
 		}
 
-		return 404;
+		$this->model = $path->displayPath();
 	}
 
 	/*

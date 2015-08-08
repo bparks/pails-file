@@ -116,7 +116,11 @@ $(function () {
 });
 </script>
 <?php endif; ?>
-<h2>Files: <?php echo $this->model['directory']->displayPath(); ?></h2>
+<h2>Files:
+<?php foreach ($this->model['directory'] as $key => $value): ?>
+	<a href="/file/index<?php echo $value; ?>"><?php echo $key == "" ? ($this->model['directory']->user ? "~" : "(root)") : $key; ?></a> /
+<?php endforeach; ?>
+</h2>
 <div class="actions">
 	<?php if ($this->is_logged_in()): ?>
 	<a href="/file/mkdir<?php echo $this->model['directory']->displayPath(); ?>">create new directory</a> |
