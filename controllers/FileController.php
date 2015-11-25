@@ -1,5 +1,93 @@
 <?php
-define('PUBLIC_FILES', 'files');
+
+class Path implements \Iterator
+{
+	public $user = false;
+	public $path = "/";
+	private $components = array();
+
+	function __construct($path = "/", $user = false)
+	{
+		$this->path = $path;
+		$this->user = $user;
+	}
+
+	function displayPath()
+	{
+		$root = $this->user ? "/~" : "";
+
+		return $root.($this->path);
+	}
+
+	function absolutePath()
+	{
+		return $this->rootPath() . $this->path;
+	}
+
+	function rootPath()
+	{
+		//This is an awful hack...
+		$root = $this->user ?
+			\Pails\File\Config::getUserFilePath() . '/' . (User::find($_SESSION['userPieUser']->user_id)->username) :
+			\Pails\File\Config::getCommonFilePath();
+
+		if (!file_exists($root))
+			mkdir($root);
+
+		return $root;
+	}
+
+	static function create ($parts)
+	{
+		if (count($parts) == 0)
+			return new Path();
+
+		$p = new Path();
+
+		if ($parts[0] === '~')
+		{
+			$p->user = true;
+			array_shift($parts);
+		}
+
+		$p->path = '/';
+		if (count($parts) != 0)
+			$p->path .= implode('/', $parts);
+
+		return $p;
+	}
+
+	//Iterator implementation
+	private $curIdx = 0;
+	
+	public function current ()
+	{
+		$tmp = array_slice($this->components, 0, $this->curIdx + 1);
+		$ret = implode('/', $tmp);
+		return ($this->user ? "/~" : "") . $ret . '/';
+	}
+
+	public function key ()
+	{
+		return $this->components[$this->curIdx];
+	}
+
+	public function next ()
+	{
+		$this->curIdx++;
+	}
+
+	public function rewind ()
+	{
+		$tmp = preg_replace('/\/\/*/', '/', substr($this->path, 1));
+		$this->components = array_merge(array(""), array_filter(explode('/', $tmp)));
+		$this->curIdx = 0;
+	}
+	public function valid ()
+	{
+		return $this->curIdx < count($this->components);
+	}
+}
 
 class FileController extends Pails\Controller
 {
@@ -10,62 +98,86 @@ class FileController extends Pails\Controller
 		'require_login'
 	);
 
+	private $commonFiles;
+	private $userFiles;
+
+	function __construct()
+	{
+		$this->commonFiles = \Pails\File\Config::getCommonFilePath();
+		$this->userFiles = \Pails\File\Config::getUserFilePath();
+	}
+
 	function index ($opts = array())
 	{
-		if (!$this->validate_directory()) return 404;
+		$path = Path::create($opts);
 
-		$path = '/';
-		if (count($opts) != 0)
-			$path .= implode('/', $opts);
+		if (!$path->user && !$this->require_permission('manage-common-files'))
+		{
+			$this->model = '/file/index/~'.$path->displayPath();
+			return 302;
+		}
 
-		$this->model = array('directory' => $path, 'handle' => opendir(PUBLIC_FILES.$path));
+		if (!$this->validate_directory($path)) return 404;
+		if (!file_exists($path->absolutePath())) return 404;
+
+		$this->model = array('directory' => $path, 'handle' => opendir($path->absolutePath()));
 	}
 
 	function mkdir ($opts = array())
 	{
-		$path = '/';
-		if (count($opts) != 0)
-			$path .= implode('/', $opts);
+		$path = Path::create($opts);
+
+		if (!$path->user && !$this->require_permission('manage-common-files'))
+		{
+			return 403;
+		}
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && $_POST['dir_name'] != '')
 		{
-			if (file_exists(PUBLIC_FILES.$path.'/'.$_POST['dir_name']))
+			if (file_exists($path->absolutePath().'/'.$_POST['dir_name']))
 			{
-				$this->model = "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists.";
-				return;
+				$this->view = false;
+				return array(
+					'error' => "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists."
+				);
 			}
 
-			mkdir(PUBLIC_FILES.$path.'/'.$_POST['dir_name']);
-			$this->model = '/file/index'.$path;
-			return 302;
+			mkdir($path->absolutePath().'/'.$_POST['dir_name']);
+			$this->view = false;
+			return array('status' => 'OK');
 		}
 
-		$this->model = $path;
+		$this->model = $path->displayPath();
 	}
 
 	function upload ($opts = array())
 	{
-		$path = '/';
-		if (count($opts) != 0)
-			$path .= implode('/', $opts);
+		$path = Path::create($opts);
+
+		if (!$path->user && !$this->require_permission('manage-common-files'))
+		{
+			return 403;
+		}
 
 		if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_FILES['file']))
 		{
-			if (file_exists(PUBLIC_FILES.$path.'/'.$_FILES['file']['name']))
+			if (file_exists($path->absolutePath().'/'.$_FILES['file']['name']))
 			{
-				$this->model = "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists.";
-				return;
+				$this->view = false;
+				return array(
+					"error" => "Sorry. A file or directory with the name '".$_POST['dir_name']."' already exists."
+				);
 			}
 
 			//Do the uploading
-			$destination = PUBLIC_FILES.$path.'/'.$_FILES['file']['name'];
+			$destination = $path->absolutePath().'/'.$_FILES['file']['name'];
 			move_uploaded_file($_FILES['file']['tmp_name'], $destination);
 
-			$this->model = '/file/index'.$path;
-			return 302;
+			$this->view = false;
+			return array('status' => 'OK');
 		}
 
-		$this->model = $path;
+		$this->model = $path->displayPath();
 	}
 
 	/*
@@ -75,23 +187,25 @@ class FileController extends Pails\Controller
 	}
 	*/
 
-	private function validate_directory()
+	private function validate_directory($path)
 	{
-		if (!file_exists(PUBLIC_FILES))
+		$root = $path->rootPath();
+
+		if (!file_exists($root))
 		{
-			$this->model = "The 'files' directory does not exist";
+			$this->model = "The '$root' directory does not exist";
 			return false;
 		}
 
-		if (!is_dir(PUBLIC_FILES))
+		if (!is_dir($root))
 		{
-			$this->model = "'files' is not a directory.";
+			$this->model = "'$root' is not a directory.";
 			return false;
 		}
 
-		if (!is_writable(PUBLIC_FILES) && !defined(IGNORE_RO_FILES))
+		if (!is_writable($root) && !defined(IGNORE_RO_FILES))
 		{
-			$this->model = "The 'files' directory is not writable. If this is intended, define the macro 'IGNORE_RO_FILES' in your config/application.php";
+			$this->model = "The '$root' directory is not writable. If this is intended, define the macro 'IGNORE_RO_FILES' in your config/application.php";
 			return false;
 		}
 

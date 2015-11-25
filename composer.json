@@ -5,7 +5,7 @@
 	},
 	"require": {
 		"pails/pails": "^1.0",
-		"pails/auth": "dev-master",
+		"pails/auth": "^1.0",
 		"pails/form_builder": "dev-master"
 	}
 }
