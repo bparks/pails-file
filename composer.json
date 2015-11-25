@@ -6,6 +6,6 @@
 	"require": {
 		"pails/pails": "^1.0",
 		"pails/auth": "^1.0",
-		"pails/form_builder": "dev-master"
+		"pails/form_builder": "^1.0"
 	}
 }
